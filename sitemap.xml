@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+     <loc>http://xqemu.com/</loc>
+     <lastmod>2018-06-23</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://xqemu.com/getting-started/</loc>
+     <lastmod>2018-06-23</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://xqemu.com/input/</loc>
+     <lastmod>2018-06-23</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://xqemu.com/networking/</loc>
+     <lastmod>2018-06-23</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://xqemu.com/tips/</loc>
+     <lastmod>2018-06-23</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://xqemu.com/developers/</loc>
+     <lastmod>2018-06-23</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+</urlset>
