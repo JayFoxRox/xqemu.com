@@ -3,11 +3,37 @@
 import html
 import os
 import csv
-from urllib.request import urlopen
-from urllib.request import Request
+from urllib.request import urlopen, Request
+import urllib
 import sys
 import json
 import datetime
+
+import bs4
+from bs4 import BeautifulSoup
+
+
+def FetchResource(url):
+    h = url.encode('utf-8').hex()
+    try:
+      print("Loading %s: %s" % (url, h))
+      with open("/tmp/%s" % h, "rb") as f:
+        print("Loading from cache")
+        return f.read()
+    except:
+      pass
+    
+    page_req = Request(url, headers={
+      'User-Agent' : "XQEMU-Compatibility",
+    })
+    print(page_req.header_items())
+    page_res = urlopen(page_req)
+    data = page_res.read()
+
+    with open("/tmp/%s" % h, "wb") as f:
+      f.write(data)
+
+    return data
 
 
 # Helper function to get compatibility list (John GodGames Google sheet)
@@ -17,11 +43,8 @@ def GetXQEMUCompatibilityList():
 
     games = []
 
-    page_req = Request(url, headers={'User-Agent' : "XQEMU-Compatibility"}) 
-    page_res = urlopen(url)
-    page_data = page_res.read()
+    page_data = FetchResource(url).decode("utf-8")
 
-    page_data = page_data.decode("utf-8")
     #print(page_data)
 
     values = [x for x in csv.reader(page_data.split('\n'))]
@@ -55,40 +78,241 @@ def GetXQEMUCompatibilityList():
 
     return games
 
-commit_cache = {}
-def GetCommitInformation(user, repository, commit): 
-  global commit_cache
 
-  # Create a cache key
-  key = (user.lower(), repository.lower(), commit.lower())
-
-  # Do cache lookup
-  if key in commit_cache:
-    return commit_cache[key]
+def GetGitHubCommitInformation(user, repository, commit): 
 
   # Construct the GitHub URL
-  url = "https://api.github.com/repos/%s/%s/git/commits/%s" % (key[0], key[1], key[2])
+  url = "https://api.github.com/repos/%s/%s/git/commits/%s" % (user.lower(), repository.lower(), commit.lower())
 
   # Request data
-  page_req = Request(url, headers={'User-Agent' : "XQEMU-Compatibility"}) 
-  page_res = urlopen(url)
-  page_data = page_res.read()
+  page_data = FetchResource(url)
 
-  # Parse JSON object
-  value = json.loads(page_data)
-
-  # Fill cache and return
-  commit_cache[key] = value
-  return value
+  # Parse JSON object and return it
+  return json.loads(page_data)
 
 
-# Get compatibility list
+def GetMobyGamesXboxCovers(game_id):
+
+  url = "https://www.mobygames.com/game/xbox/%s/cover-art" % game_id
+  
+  page_data = FetchResource(url)
+
+  soup = BeautifulSoup((page_data), "html.parser")
+
+  # Search for divs of class "coverHeading"
+  coverHeadings = soup.findAll("div", {"class": "coverHeading"})
+  
+  # Collect all covers
+  cover_groups = []
+  for coverHeading in coverHeadings:
+
+    # Start a new cover group
+    cover_group = {}
+
+    # Get the h2 to know the platform
+    platform = coverHeading.find('h2')
+    print("Platform %s" % platform)
+
+    #FIXME: Map platform
+
+    # Find table for basic info
+    table = coverHeading.find("table")
+
+    # Get key and value from cells in each row
+    trs = table.findAll("tr")
+    for tr in trs:
+      tds = tr.findAll("td")
+      assert(len(tds) == 3)
+      key = tds[0]
+      colon = tds[1]
+      value = tds[2]
+      assert(colon.text == ' : ') #FIXME: These are not normal spaces?
+      print("%s: %s" % (key.text, value.text))
+
+      # Map keys, split responses
+      if key.text == 'Country':
+        spans = value.findAll('span')
+        countries = []
+        for span in spans:
+          countries += [span.text.strip()]
+        cover_group['countries'] = countries
+      elif key.text == 'Packaging':
+        packaging = {}
+        packaging['packaging_name'] = value.text.strip()
+        cover_group['packaging'] = packaging
+      elif key.text == 'Video Standard':
+        #FIXME: MobyGames API doesn't have this field... report!
+        cover_group['video_standards'] = [value.text.strip()]
+      elif key.text == 'Package Comments':
+        cover_group[ 'comments'] = value.text.strip()
+      else:
+        assert(False)
+
+    # Search for divs of class "thumbnail"
+    row = coverHeading.next_sibling
+    thumbnails = row.findAll("div", {"class": "thumbnail"})
+
+    # Process all thumbnails
+    covers = []
+    for thumbnail in thumbnails:
+
+      # Start a new cover object
+      cover = {}
+
+      # Search for divs of class "thumbnail-image-wrapper"
+      thumbnail_image_wrapper = thumbnail.find("div", {"class": "thumbnail-image-wrapper"})
+      
+      # Get cover ID from href and use URL
+      a = thumbnail_image_wrapper.find("a", {"class": "thumbnail-cover"})
+      href = a['href']
+      cover_id_offset = href.rfind(',')
+      cover_id = href[cover_id_offset+1:-1]
+      cover['image'] = "https://www.mobygames.com/images/covers/l/%s-.jpg" % cover_id
+
+      # Search for divs of class "thumbnail-cover-caption"
+      thumbnail_cover_caption = thumbnail.find("div", {"class": "thumbnail-cover-caption"})
+      cover['scan_of'] = thumbnail_cover_caption.text.strip()
+
+      # Respect <br> tags
+      for br in thumbnail_cover_caption.findAll("br"):
+        br.replace_with("\n")
+
+      # Get all lines
+      print(thumbnail_cover_caption.text)
+      lines = thumbnail_cover_caption.text.split("\n")
+      print(lines)
+      cover_group['scan_of'] = lines[0]
+      if len(lines) > 1:
+        assert(len(lines) == 2)
+        cover_group['comments'] = lines[1]
+
+      covers += [cover]
+
+    cover_group['covers'] = covers
+
+    cover_groups += [cover_group]
+
+  return cover_groups
+
+
+def GetMobyGamesXboxList():
+
+  is_done = False
+
+  games = []
+  offset = 0
+  while True:
+
+    url = "https://www.mobygames.com/browse/games/xbox/offset,%d/list-games/" % offset
+
+    page_data = FetchResource(url)
+
+    soup = BeautifulSoup((page_data), "html.parser")
+
+    # Find offset info
+    mobHeaderItems = soup.find("td", {"class": 'mobHeaderItems'}).text
+    
+    assert(mobHeaderItems[0:7] == '(items ')
+    assert(mobHeaderItems[-1:] == ')')
+    mobHeaderItems = mobHeaderItems[7:-1]
+
+    dash_index = mobHeaderItems.find("-")
+    of_index = mobHeaderItems.find(" of ", dash_index)
+
+    offset_from = int(mobHeaderItems[0:dash_index])
+    offset_to = int(mobHeaderItems[dash_index+1:of_index])
+    offset_of = int(mobHeaderItems[of_index+4:])
+
+    print(offset)
+    assert(offset_from == (offset + 1))
+
+    print("'%s' - '%s' (%s)" % (offset_from, offset_to, offset_of))
+
+    # Find the game list
+    mof_object_list = soup.find("table", {'id': 'mof_object_list'})
+
+    # Process each row, starting in the second (skips headers)
+    trs = mof_object_list.findAll("tr")[1:]
+    for tr in trs:
+
+      # Start a new game object
+      game = {}
+
+      tds = tr.findAll("td")
+
+      #FIXME: Adopt MobyGames API standard
+      a = tds[0].find('a')
+      href = a['href']
+      game_id_offset = href.rfind('/')
+      game_id = href[game_id_offset+1:]
+
+      game['id'] = game_id
+      game['name'] = tds[0].text
+
+      games += [game]
+
+    offset = offset_to
+
+    # Check if we read everything
+    if offset == offset_of:
+      break
+
+  return games
+
+# Get the game list
+game_list = GetMobyGamesXboxList()
+
+# Find all covers for one game
+game = game_list[0]
+cover_groups = GetMobyGamesXboxCovers(game['id'])
+#print(json.dumps(cover_groups, indent=2))
+
+# Dump all covers to file
+i = 0
+for cover_group in cover_groups:
+  print(cover_group)
+  for cover in cover_group['covers']:
+    jpg = FetchResource(cover['image'])
+    with open("%s_%d_%s.jpg" % (game['id'], i, cover['scan_of']), "wb") as f:
+      f.write(jpg)
+  i += 1
+
+# Get XQEMU compatibility list
 xqemu_compatibility = GetXQEMUCompatibilityList()
 
 # Sort list by name
 #FIXME: Add row information first, so we can trace info back to source
-#FIXME: Make 'Æ' [from "Æon Flux"] equivalent to "Ae"
+#FIXME: Make 'Æ' [from "Æon Flux"] equivalent to "Ae" [also umlauts?]
 xqemu_compatibility = sorted(xqemu_compatibility, key=lambda k: k['Title']) 
+
+
+# Match game names
+for report in xqemu_compatibility:
+  title = report['Title']
+
+  def is_match(a, b):
+    def simplify(x):
+      x = x.lower()
+      x = x.replace(":", "")
+      x = x.replace("-", "")
+      x = x.replace(".", "")
+      x = x.replace(" and ", "&")
+      x = x.replace(" ", "")
+      return x
+    return simplify(a) == simplify(b)
+  
+  # Search for the XQEMU game names in MobyGames  
+  games = [game for game in game_list if is_match(game['name'], title)]
+  if len(games) == 0:
+    print("- [No games found for '%s'](https://www.mobygames.com/search/quick?p=13&sFilter=1&sG=on&q=%s)" % (title, urllib.parse.quote(title)))
+  elif len(games) > 1:
+    print("- Multiple games found for '%s'" % title)
+  for game in games:
+    if game['name'] != title:
+      print("- XQEMU '%s' == '%s' MobyGames" % (title, game['name']))
+
+  # Search for the XQEMU game names in Wikipedia
+  #FIXME: Maybe just try to match Wikipedia to Mobygames or vice-versa
 
 
 
@@ -262,7 +486,7 @@ for report in xqemu_compatibility:
     version = report['Commit'][0:8]
     version_url = "https://www.github.com/%s/%s/commits/%s" % (report['Author'], report['Repository'], report['Commit'])
     version_url = version_url.lower()
-    version_date = GetCommitInformation(report['Author'], report['Repository'], report['Commit'])
+    version_date = GetGitHubCommitInformation(report['Author'], report['Repository'], report['Commit'])
     version_date = datetime.datetime.strptime(version_date['committer']['date'], '%Y-%m-%dT%H:%M:%SZ')
     version_date = "%04d-%02d-%02d" % (version_date.year,  version_date.month,  version_date.day)
 
