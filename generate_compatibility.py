@@ -315,8 +315,24 @@ for report in xqemu_compatibility:
   #FIXME: Maybe just try to match Wikipedia to Mobygames or vice-versa
 
 
+# Small helper to generate tooltips
+def link(text, tooltip=None, url=None, color='black'):
+  
+  style = ['color: %s;' % color]
 
+  if url == None:
+    href = ''
+  else:
+    href = ' href="%s"' % url #FIXME: Keep rightmost url part for anchor #urllib.parse.quote(url)
+    style += ['border-bottom:1px dotted %s;' % color]
 
+  if tooltip == None: 
+    title = ''
+  else:
+    title = ' title="%s"' % tooltip #FIXME: escape
+
+  #FIXME: Add support for links
+  return '<a style="%s"%s%s">%s</a>' % (" ".join(style), href, title, text)
 
 s = 'title: Compatibility List\n'
 
@@ -350,14 +366,16 @@ for report in xqemu_compatibility:
     continue
 
 
-  def flag(s):
+  def flag(s=None):
+    if s == None:
+      return "&#x1F310;"
     r = ""
     for c in s.lower():
       r += "&#x%X;" % (0x1f1e6 + ord(c) - ord('a'))
     return r
 
   regions = [
-    "&#x1F310;", # world (should only be used alone?)
+    flag(), # world (should only be used alone?)
     flag("au"), # australia
     flag("eu"), # european union
     flag("jp"), # japan
@@ -461,7 +479,7 @@ for report in xqemu_compatibility:
     'Shrek': 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d9/Shrek_Coverart.png/220px-Shrek_Coverart.png',
     'Shrek 2': 'https://images-na.ssl-images-amazon.com/images/I/51uI5ZNvyCL.jpg',
     'Shrek SuperSlam': 'https://i.ebayimg.com/10/!!e!VNwgCGM~$(KGrHqV,!lMEz+4(R+8CBNP4L8o++Q~~_62.JPG',
-    'Shrek Super Party': 'https://images-na.ssl-images-amazon.com/images/I/51B8uzSFchL._SY445_.jpg',
+    'Shrek: Super Party': 'https://images-na.ssl-images-amazon.com/images/I/51B8uzSFchL._SY445_.jpg',
   }
 
   broken = report['Broken'].lower()
@@ -513,7 +531,6 @@ for report in xqemu_compatibility:
     print(status_type)
     assert(False)
 
-
   # These are actual output
   issue_type = []
   row_style = ''
@@ -523,19 +540,23 @@ for report in xqemu_compatibility:
     issue_types = []
 
     # Check for graphical issues
+    graphics_issues_hint = []
     graphics_issues = False
     if notes.find('lighting issues') != -1:
+      graphics_issues_hint += ["Broken lighting"]
       graphics_issues = True
     if notes.find('broken characters') != -1:
+      graphics_issues_hint = ["Broken character models"]
       graphics_issues = True
     if notes.find('graphical bugs') != -1:
       graphics_issues = True
     if broken == 'lighting':
+      graphics_issues_hint += ["Broken lighting"]
       graphics_issues = True
 
     # List graphical issues as problem
     if graphics_issues:
-      issue_types += [('Broken graphics', 'Graphics emulation has issues')]
+      issue_types += [('Broken graphics', "; ".join(graphics_issues_hint))]
 
     # Always assume missing audio
     issue_types += [('Missing audio', "There is no audio emulation")]
@@ -548,30 +569,47 @@ for report in xqemu_compatibility:
     issue_types += [('Slow',"Performance assumption")]
 
     # Make issue list sexy
-    for i, j in issue_types:
-      issue_type += ['&#9888;&nbsp;<a style="color:black;" href="#" title="%s">%s</a>' % (j, i)]
+    for text, hint in issue_types:
+      issue_type += ['&#9888;&nbsp;%s' % (link(text, hint))]
+
+    # Reset exit reason info
+    exit_reason = None
+    exit_reason_hint = None
+    exit_reason_url = None
 
     # Try to find the real exit reason
     if broken == '':
       exit_reason = None
     elif broken == 'lighting':
-      exit_reason = ''
+      exit_reason = 'Unknown-FIXME'
     elif broken == 'shader':
       exit_reason = 'Aborts'
+      #FIXME: show note
+      exit_reason_hint = "Errors in shader generator"
     elif broken == 'texture':
       exit_reason = 'Aborts'
+      #FIXME: show note
+      exit_reason_hint = "Missing texture format emulation"
     elif broken[0:8] == 'hw/xbox/':
       exit_reason = 'Aborts'
+      exit_reason_hint = "Unexpected condition in emulation (or missing emulation feature); Click to see responsible source-code"
+      file, colon, line = broken.rpartition(":")
+      line = int(line.partition('-')[0]) #FIXME: Decode this properly
+      exit_reason_url = "https://www.github.com/%s/%s/blob/%s/%s#L%d" % (report['Author'], report['Repository'], report['Commit'], file, line)
     elif broken == 'noboot':
       exit_reason = 'Stuck'
+      exit_reason_hint = "Game does not boot for unknown reasons"
     elif broken == 'performance':
       exit_reason = 'Stuck'
+      exit_reason_hint = "Emulation is too slow to continue"
     elif broken == 'audio':
       exit_reason = None #FIXME: Is this okish?
     elif broken == 'memleak':
       exit_reason = 'Leaks memory'
+      exit_reason_hint = "Consumes more RAM over time, until no memory is left"
     elif broken == 'crash':
       exit_reason = 'Crashes'
+      exit_reason_hint = "The Emulator crashed for unknown reasons"
     else:
       assert(False)
 
@@ -579,14 +617,19 @@ for report in xqemu_compatibility:
     if exit_reason == None:
       if notes.find('hang') != -1:
         exit_reason = 'Stuck'
+        exit_reason_hint = "The Game gets stuck for unknown reasons"
       if notes.find('stays at') != -1:
         exit_reason = 'Stuck'
+        exit_reason_hint = "The Game gets stuck for unknown reasons"
       if notes.find('black screen') != -1:
         exit_reason = 'Stuck'
+        exit_reason_hint = "The Game gets stuck at black screen for unknown reasons"
 
     # Append the exit reason
     if exit_reason != None:
-      issue_type += ['&#x1F5D9;&nbsp;%s' % exit_reason]
+      issue_type += ['&#x1F5D9;&nbsp;%s' % (link(exit_reason, exit_reason_hint, exit_reason_url))]
+    else:
+      issue_type += [""]
 
     # Move to playable, if ingame and no exit-reason exists
     if exit_reason == None and status_type == 'Ingame':
@@ -602,7 +645,7 @@ for report in xqemu_compatibility:
   status += '<br><br><span style="color:gray;">'
   if version != None:
     assert(version_url != None) #FIXME: Don't add version_url if it's `None`
-    status += 'Version:&nbsp;<a href=%s title="See recent changes for this version" style="color:gray; border-bottom:1px dotted gray;">%s</a>' % (version_url, version)
+    status += 'Version:&nbsp;%s' % link(version, "Tested emulator version; Click to see recent changes for this version", version_url, 'gray')
   if version_date != None:
     status += '<br>Version&nbsp;date:&nbsp;%s' % (version_date)
   status += '</span>'
@@ -621,8 +664,15 @@ for report in xqemu_compatibility:
   s +=   '<td>'
   s +=     '<img style="height: 128px; border:1px solid gray; text-align: center;" src="%s" />' % cover
   s +=   '</td><td>'
-  s +=     '<b class="name">%s</b><br>' % (html.escape(game_title))
+  tu = urllib.parse.quote(game_title)
+  th = html.escape(game_title)
+  #FIXME: This anchor doesn't catch all
+  s +=     '<b class="name"><a style="color:#555;" href="#%s" name="%s">%s</a></b><br>' % (tu, tu, th)
+  s +=      'Title-ID: MS-007<br>'
+  s +=      'Versions: <div>' + ('1.00 %s / 1.02 %s / %s %s' % (flag("us"), flag("eu"), link('1.06', None, 'http://www.redump.org/'), flag()) * 2) + "</div>" #FIXME: Redump links
+  #s +=      'XBE-Timestamps: 0x12345678 / 0xDEADBEEF<br>' #FIXME: Xbox archive links
   #s +=     'Title-ID: %s' % (title_id)
+  s +=     '<br><br><br><span style="color:gray;">&#x1F517; %s</span>' % (link('MobyGames', 'Game information on MobyGames', 'https://www.mobygames.com/', 'gray'))
   s +=   '</td><td>'
   s +=     '%s' % (status)
   s +=   '</td>'
