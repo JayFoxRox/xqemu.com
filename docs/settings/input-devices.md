@@ -25,6 +25,8 @@ of the connected device by changing `index=X` accordingly.
 
 Multiple gamepads can be connected by specifying the line above multiple times.
 
+Only enable gamepads which are connected to your system; XQEMU will abort at startup if it can't find the requested devices.
+
 ## Option 2: Use your PC keyboard
 
 If you do not have access to a real gamepad, you can use your PC's keyboard to

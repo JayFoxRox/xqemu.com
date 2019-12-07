@@ -91,7 +91,9 @@ pages:
   - Welcome: index.md
   - Screenshots: screenshots.md
   - Getting Started: getting-started.md
-  - Input Devices: input.md
+  - General Settings: settings/general.md
+  - System Settings: settings/system.md
+  - Input Devices Settings: settings/input-devices.md
   - Networking: networking.md
   - Tips: tips.md
   - FAQ: faq.md

@@ -18,20 +18,6 @@ of the stuff that a real Xbox needs when it turns on:
 Unfortunately, distributing some of these items would violate copyright laws, so
 you'll need to acquire them on your own.
 
-!!! attention
-
-    The XQEMU project does not endorse or promote piracy. We don't link to
-    copyrighted files, or discuss how to acquire them. The only legal way to
-    acquire these files is to dump them from *your real, physical Xbox*. Please
-    don't ask us how to get them.
-
-#### MCPX Boot ROM Image
-
-    MD5 (mcpx_1.0.bin) = d49c52a4102f6df7bcf8d0617ac475ed
-
-If your MCPX dump has an MD5 of `196a5f59a13382c185636e691d6c323d`, you dumped
-it badly and it's a couple of bytes off. It should start with `0x33 0xC0` and end
-with `0x02 0xEE`.
 
 #### Flash ROM Image (aka BIOS/Kernel)
 
@@ -41,40 +27,7 @@ not allow booting unofficial software.
 
 People have reported most success using the modified "COMPLEX 4627" BIOS (retail version).
 
-#### Hard Disk Drive Image
 
-You have options:
-
-##### Option 1: Use a pre-built Xbox HDD image (recommended)
-
-You can use a pre-built 8G Xbox HDD image, free of any copyrighted content, and
-only containing a dummy dashboard. [You can download this image from
-here!](https://github.com/xqemu/xqemu-hdd-image/releases)
-
-!!! note
-
-    By design, this particular drive image does not contain the official Xbox
-    dashboard, but instead contains only a dummy dashboard. Because of this, you
-    may see an error message when starting XQEMU with an unmodified retail BIOS
-    image due to the system failing to find a properly signed dashboard.
-
-    If you would like to change your dashboard (perhaps to the official retail
-    dashboard, or any alternative dashboard), or copy additional files over to
-    the Xbox HDD, you can start XQEMU, using a modified BIOS image, and a disc
-    containing an alternative dashboard. Then you can either install that
-    dashboard, or connect to XQEMU using FTP to transfer your desired dashboard
-    files to the HDD.
-
-##### Option 2: Image your real Xbox HDD
-
-This is the most authentic way to do it. Unlock your drive, connect it to a
-computer, and `dd` the entire contents of the drive straight to a file. This
-file can be used as-is with XQEMU.
-
-##### Option 3: Build a new HDD image from scratch
-
-You can also create an Xbox hard-disk image using XboxHDM. Directions on how
-to do this [can be found here](https://github.com/xqemu/xqemu-hdd-image).
 
 Running XQEMU
 -------------
